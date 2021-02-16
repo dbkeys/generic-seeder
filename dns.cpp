@@ -180,6 +180,7 @@ int static write_record_aaaa(unsigned char** outpos, const unsigned char *outend
   int error = 0;
   int ret = write_record(outpos, outend, name, offset, TYPE_AAAA, cls, ttl);
   if (ret) return ret;
+  // 3x larger than previously ## if (outend - *outpos < 6) {  
   if (outend - *outpos < 18) {
     error = -5;
   } else {
@@ -268,8 +269,26 @@ static ssize_t set_error(unsigned char* outbuf, int error) {
 
 ssize_t static dnshandle(dns_opt_t *opt, const unsigned char *inbuf, size_t insize, unsigned char* outbuf) {
   int error = 0;
-  if (insize < 12) // DNS header
+  if (insize < 12) // DNS header must be 12 bytes
     return -1;
+//                                    1  1  1  1  1  1 
+//      0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//    |                      ID                       | // ID=Identifier gen'd by requesting program. Copied in reply
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+ // QR=0/RP=1; Opcode= query kind; AA=1 Authortative TC-Truncated
+//    |QR|   Opcode  |AA|TC|RD|RA|   Z    |   RCODE   | //      RD=Desire Recurion RA=Recursion Available  Z - Reserved
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+ //      RCODE - Response Code
+//    |                    QDCOUNT                    | //              0 - No Error    
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+ //              1 - Format Error. Server unable to interpret Q
+//    |                    ANCOUNT                    | //              2 - Server Failure
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+ //              3 - Name Error, 4-Not Implt'd 5-Refused
+//    |                    NSCOUNT                    | //  QDCOUNT - Query Count
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+ //  ANCOUNT - Answers, # Records in Response Section
+//    |                    ARCOUNT                    | //  NSCOUNT - # of NS resource records (RR) in authority records section
+//    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+ //  ARCOUNT - # of of RR's in additional records section
+//      
+//    from: https://www2.cs.duke.edu/courses/fall16/compsci356/DNS/DNS-primer.pdf
+
   // copy id
   outbuf[0] = inbuf[0];
   outbuf[1] = inbuf[1];
@@ -298,6 +317,7 @@ ssize_t static dnshandle(dns_opt_t *opt, const unsigned char *inbuf, size_t insi
   if (ret == -1) return set_error(outbuf, 1);
   if (ret == -2) return set_error(outbuf, 5);
   int namel = strlen(name), hostl = strlen(opt->host);
+	// This is where to match requested name with the correct blockchain from among all -h hosts being served.
   if (strcasecmp(name, opt->host) && (namel<hostl+2 || name[namel-hostl-1]!='.' || strcasecmp(name+namel-hostl,opt->host))) return set_error(outbuf, 5);
   if (inend - inpos < 4) return set_error(outbuf, 1);
   // copy question to output
@@ -317,6 +337,7 @@ ssize_t static dnshandle(dns_opt_t *opt, const unsigned char *inbuf, size_t insi
   unsigned char *outpos = outbuf+(inpos-inbuf);
   unsigned char *outend = outbuf + BUFLEN;
   
+  printf("DNS: Request host='%s' type=%i class=%i\n", name, typ, cls);
 //   printf("DNS: Request host='%s' type=%i class=%i\n", name, typ, cls);
   
   // calculate max size of authority section
@@ -425,6 +446,7 @@ int dnsserver(dns_opt_t *opt) {
     memset((char *) &si_me, 0, sizeof(si_me));
     si_me.sin6_family = AF_INET6;
     si_me.sin6_port = htons(opt->port);
+    // old: si_me.sin6_addr = in6addr_any;
     inet_pton(AF_INET6, opt->addr, &si_me.sin6_addr);
     if (bind(listenSocket, (struct sockaddr*)&si_me, sizeof(si_me))==-1)
       return -2;

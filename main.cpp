@@ -12,11 +12,16 @@
 #include <string>
 #include <curl/curl.h>
 #include <libconfig.h++>
+#include <ncurses.h>
 #include "bitcoin.h"
 #include "db.h"
 
 using namespace std;
 using namespace libconfig;
+
+// [Major].[Minor].[Patch].[Build].[letter]
+// [0].[1].[1].[0].[c]
+const char* dnsseeder_version = "0.1.1.0.c\0x0";
 
 bool fDumpAll = false;
 bool bCurrentBlockFromExplorer = false;
@@ -571,21 +576,33 @@ extern "C" void* ThreadStats(void*) {
     strftime(c, 256, "[%y-%m-%d %H:%M:%S]", tmp);
     CAddrDbStats stats;
     db.GetStats(stats);
-    if (first)
-    {
-      first = false;
-      printf("\n\n\n\x1b[3A");
-    }
-    else
-      printf("\x1b[2K\x1b[u");
-    printf("\x1b[s");
+//    if (first)
+//    {
+//      first = false;
+//	 // https://notes.burke.libbey.me/ansi-escape-codes/
+//      printf("\n\n\n\x1b[3A"); // ANSI escape \x1b = ESC; 3A = move cursor up 3 c    hars
+//    }
+//    else
+//      printf("\x1b[2K\x1b[u");  // u = restore cursor to position last saved by s
+//    printf("\x1b[s"); // s = save cursor position
     uint64_t requests = 0;
     uint64_t queries = 0;
     for (unsigned int i=0; i<dnsThread.size(); i++) {
       requests += dnsThread[i]->dns_opt.nRequests;
       queries += dnsThread[i]->dbQueries;
     }
-    printf("%s %i/%i available (%i tried in %is, %i new, %i active), %i banned; %llu DNS requests, %llu db queries", c, stats.nGood, stats.nAvail, stats.nTracked, stats.nAge, stats.nNew, stats.nAvail - stats.nTracked - stats.nNew, stats.nBanned, (unsigned long long)requests, (unsigned long long)queries);
+    move(4,55); printw("%s",c);
+    move(8,8);  printw("%i/%i", stats.nGood, stats.nAvail);
+    move(8,20); printw("%i", stats.nTracked);
+    move(8,28); printw("%i", stats.nAge);
+    move(8,36); printw("%i", stats.nNew);
+    move(8,44); printw("%i", stats.nAvail - stats.nTracked - stats.nNew);
+    move(8,54); printw("%i", stats.nBanned);  
+    move(8,63); printw("%llu", (unsigned long long)requests);
+    move(8,72); printw("%llu", (unsigned long long)queries);
+
+    // printf("%s %i/%i available (%i tried in %is, %i new, %i active), %i banned; %llu DNS requests, %llu db queries", c, stats.nGood, stats.nAvail, stats.nTracked, stats.nAge, stats.nNew, stats.nAvail - stats.nTracked - stats.nNew, stats.nBanned, (unsigned long long)requests, (unsigned long long)queries);
+    refresh();
     Sleep(1000);
   } while(1);
   return nullptr;
@@ -593,8 +610,43 @@ extern "C" void* ThreadStats(void*) {
 
 string sSeeds[11];
 string *seeds = sSeeds;
+// MultiSeeder / SuperSeeder: Vectorize Array sSeeds 
+/// cameron:/usr/local/src/bitmark-seeder.dbkeys/main.cpp 424:5  
+////  These should be regular P2P coin nodes which serve as "fixed seed nodes", 
+//static const string mainnet_seeds[] =  {"seed.bitmark.co",
+//                                        "de.bitmark.co",
+//                                        "us.bitmark.co",
+//                                        "eu.bitmark.io",
+//                                        "ge.bitmark.io",
+//                                        "jp.bitmark.io",
+//                                        "mx.bitmark.io",
+//                                        "us.bitmark.io",
+//                                        "uk.bitmark.one",
+//                                        ""};
+//
+//// Bitcoin Examples
+////static const string mainnet_seeds[] = {"dnsseed.bluematt.me", "bitseed.xf2.org", "dnsseed.bitcoin.dashjr.org", "seed.bitcoin.sipa.be", ""};
+//
+//// Bitmark (MARKS) (BTM)  
+//static const string testnet_seeds[] = { "tz.bitmark.co",
+//                                        "tz.bitmark.guru",
+//                                        "tz.bitmark.io",
+//                                        "tz.bitmark.mx",
+//                                        "tz.bitmark.one",
+//                                       ""};
+//// Bitcoin Examples
+////static const string testnet_seeds[] = {"testnet-seed.alexykot.me",
+////                                       "testnet-seed.bitcoin.petertodd.org",
+////                                       "testnet-seed.bluematt.me",
+////                                       "testnet-seed.bitcoin.schildbach.de",
+////                                       ""};
+//static const string *seeds = mainnet_seeds;
 
 extern "C" void* ThreadSeeder(void*) {
+  // Bitmark - no TOR / Onion hidden service nodes yet; Nov. 29, 2020
+  //if (!fTestNet){
+  //  db.Add(CService("kjy2eqzk4zwi5zd3.onion", 8333), true);
+  // }
   do {
     for (int i=0; seeds[i] != ""; i++) {
       vector<CNetAddr> ips;
@@ -603,7 +655,7 @@ extern "C" void* ThreadSeeder(void*) {
         db.Add(CService(*it, cfg_wallet_port), true);
       }
     }
-    Sleep(1800000);
+Sleep(1800000);
   } while(1);
   return nullptr;
 }
@@ -612,6 +664,14 @@ int main(int argc, char **argv) {
   Config cfg;
   string sConfigName = "settings.conf";
   //printf("%s\n", (sAppName + " v" + sAppVersion).c_str());
+
+  initscr();
+  move(2,2);   printw("BlockChain Node Tracker / DNS Seeder Monitor - v0.1.1.0.c\n");
+
+  move(6,62);  printw("DNS      db");
+  move(7,7);   printw("Available   tried   in sec   new    active   Banned  Requests Queries");
+  move(15,8);  printw("Supporting whitelisted filters: ");
+  move(16,15);
 
   // Read "settings.conf" file for configuration parameters.
   try {
@@ -749,31 +809,39 @@ int main(int argc, char **argv) {
   opts.ParseCommandLine(argc, argv); //  Check for command line arguments
 
   printf("Supporting whitelisted filters: ");
+  move(16,15);
   for (std::set<uint64_t>::const_iterator it = opts.filter_whitelist.begin(); it != opts.filter_whitelist.end(); it++) {
       if (it != opts.filter_whitelist.begin()) {
-          printf(",");
+	  printw(",");
+       // printf(",");
       }
-      printf("0x%lx", (unsigned long)*it);
+ 
+      printw("0x%lx", (unsigned long)*it);
+      //printf("0x%lx", (unsigned long)*it);
   }
-  printf("\n");
+  printw("\n");
+  //printf("\n");
   if (opts.tor) {
     CService service(opts.tor, 9050);
     if (service.IsValid()) {
-      printf("Using Tor proxy at %s\n", service.ToStringIPPort().c_str());
+      printw("Using Tor proxy at %s\n", service.ToStringIPPort().c_str());
+      //printf("Using Tor proxy at %s\n", service.ToStringIPPort().c_str());
       SetProxy(NET_TOR, service);
     }
   }
   if (opts.ipv4_proxy) {
     CService service(opts.ipv4_proxy, 9050);
     if (service.IsValid()) {
-      printf("Using IPv4 proxy at %s\n", service.ToStringIPPort().c_str());
+      printw("Using IPv4 proxy at %s\n", service.ToStringIPPort().c_str());
+      //printf("Using IPv4 proxy at %s\n", service.ToStringIPPort().c_str());
       SetProxy(NET_IPV4, service);
     }
   }
   if (opts.ipv6_proxy) {
     CService service(opts.ipv6_proxy, 9050);
     if (service.IsValid()) {
-      printf("Using IPv6 proxy at %s\n", service.ToStringIPPort().c_str());
+      printw("Using IPv6 proxy at %s\n", service.ToStringIPPort().c_str());
+      //printf("Using IPv6 proxy at %s\n", service.ToStringIPPort().c_str());
       SetProxy(NET_IPV6, service);
     }
   }
@@ -783,7 +851,9 @@ int main(int argc, char **argv) {
   }
   bool fDNS = true;
   if (!opts.ns) {
-    printf("No nameserver set. Not starting DNS server.\n");
+    // move(y,x) to warning window ?
+    printw("No nameserver set. Not starting DNS server.\n");
+    //printf("No nameserver set. Not starting DNS server.\n");
     fDNS = false;
   }
   if (fDNS && !opts.host) {
@@ -815,20 +885,30 @@ int main(int argc, char **argv) {
   pthread_create(&threadBlock, NULL, ThreadBlockReader, NULL);
   printf("done\n");
   if (fDNS) {
-    printf("Starting %i DNS threads for %s on %s (port %i)...", opts.nDnsThreads, opts.host, opts.ns, opts.nPort);
+    move(4,2);	 printw("%s on %s:%i", opts.host, opts.ns, opts.nPort);
+    move(11,11); printw("DNS threads:");
+    //printf("Starting %i DNS threads for %s on %s (port %i)...", opts.nDnsThreads, opts.host, opts.ns, opts.nPort);
     dnsThread.clear();
     for (int i=0; i<opts.nDnsThreads; i++) {
       dnsThread.push_back(new CDnsThread(&opts, i));
       pthread_create(&threadDns, NULL, ThreadDNS, dnsThread[i]);
-      printf(".");
+      //printf(".");
+      //printf(".");
       Sleep(20);
     }
-    printf("done\n");
+    move(11,26); printw("%i", opts.nDnsThreads);
+    move(11,29); printw("started");
+    //printf("done\n");
   }
-  printf("Starting seeder...");
+  move(12,16); printw("seeder:");
+  //printf("Starting seeder...");
   pthread_create(&threadSeed, NULL, ThreadSeeder, NULL);
-  printf("done\n");
-  printf("Starting %i crawler threads...", opts.nThreads);
+  move(12,29); printw("started");
+  //printf("done\n");
+  move(13,7); printw("crawler threads:");
+  move(13,25); printw("%i", opts.nThreads);
+  //printf("Starting %i crawler threads...", opts.nThreads);
+  refresh();
   pthread_attr_t attr_crawler;
   pthread_attr_init(&attr_crawler);
   pthread_attr_setstacksize(&attr_crawler, 0x20000);
@@ -837,15 +917,17 @@ int main(int argc, char **argv) {
     pthread_create(&thread, &attr_crawler, ThreadCrawler, &opts.nThreads);
   }
   pthread_attr_destroy(&attr_crawler);
-  printf("done\n");
+  move(13,29); printw("started");
+  //printf("done\n");
 
-  cout << "\n   " << cfg_blockchain_name << " -  DNS Seed Server\n";
-  cout << "\t for sub-domain: " << opts.host << endl;
-  cout << "\t ( Query with: \'dig -p " << opts.nPort << " @" << opts.ns << " " << opts.host <<"\' )\n" << endl;
+//  cout << "\n   " << cfg_blockchain_name << " -  DNS Seed Server\n";
+//  cout << "\t for sub-domain: " << opts.host << endl;
+//  cout << "\t ( Query with: \'dig -p " << opts.nPort << " @" << opts.ns << " " << opts.host <<"\' )\n" << endl;
 
   pthread_create(&threadStats, NULL, ThreadStats, NULL);
   pthread_create(&threadDump, NULL, ThreadDumper, NULL);
   void* res;
   pthread_join(threadDump, &res);
+  endwin();
   return 0;
 }
