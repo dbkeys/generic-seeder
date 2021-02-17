@@ -318,7 +318,7 @@ ssize_t static dnshandle(dns_opt_t *opt, const unsigned char *inbuf, size_t insi
   if (ret == -1) return set_error(outbuf, 1);
   if (ret == -2) return set_error(outbuf, 5);
   int namel = strlen(name), hostl = strlen(opt->host);
-  move(30,2);
+  move(24,2);
   printw("Query name: %s",&name[0]);
 	// This is where to match requested name with the correct blockchain from among all -h hosts being served.
   if (strcasecmp(name, opt->host) && (namel<hostl+2 || name[namel-hostl-1]!='.' || strcasecmp(name+namel-hostl,opt->host))) return set_error(outbuf, 5);
@@ -340,8 +340,9 @@ ssize_t static dnshandle(dns_opt_t *opt, const unsigned char *inbuf, size_t insi
   unsigned char *outpos = outbuf+(inpos-inbuf);
   unsigned char *outend = outbuf + BUFLEN;
   
-  printf("DNS: Request host='%s' type=%i class=%i\n", name, typ, cls);
-//   printf("DNS: Request host='%s' type=%i class=%i\n", name, typ, cls);
+  move(25,2);
+  printw("DNS: Request host='%s' type=%i class=%i\n", &name[0], typ, cls);
+//printf("DNS: Request host='%s' type=%i class=%i\n", name, typ, cls);
   
   // calculate max size of authority section
   
