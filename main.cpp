@@ -666,11 +666,11 @@ int main(int argc, char **argv) {
   //printf("%s\n", (sAppName + " v" + sAppVersion).c_str());
 
   initscr();
-  move(2,2);   printw("BlockChain Node Tracker / DNS Seeder Monitor - v0.1.1.0.c\n");
+  move(2,8);   printw("BlockChain   Node Tracker / DNS Seeder Monitor  -  v0.1.1.0.c\n");
 
   move(6,62);  printw("DNS      db");
   move(7,7);   printw("Available   tried   in sec   new    active   Banned  Requests Queries");
-  move(15,8);  printw("Supporting whitelisted filters: ");
+  move(15,7);  printw("Supporting whitelisted filters: ");
   move(16,15);
 
   // Read "settings.conf" file for configuration parameters.
@@ -688,7 +688,7 @@ int main(int argc, char **argv) {
   // This version introduces "BlockChain Name" parameter 
   try {
     cfg_blockchain_name = cfg.lookup("blockchain_name").c_str();
-    cout << cfg_blockchain_name << " -  DNS Seed Server - " << sAppName << " v" << sAppVersion << "\n";
+    // cout << cfg_blockchain_name << " -  DNS Seed Server - " << sAppName << " v" << sAppVersion << "\n";
   } catch(const SettingNotFoundException &nfex) {
         // return(EXIT_FAILURE); // Too drastic: can ignore this failure
         cout << "Missing 'blockchain_name' setting in configuration file." << endl;
@@ -741,6 +741,9 @@ int main(int argc, char **argv) {
   
   try {
     cfg_explorer_url = cfg.lookup("explorer_url").c_str();
+	//printf("EXPLORER URL: %s \n",&cfg_explorer_url[0]);
+	//cout << "EXPLORER URL: " << cfg_explorer_url;
+	//cin >> cfg_explorer_url2;
   } catch(const SettingNotFoundException &nfex) {
     cfg_explorer_url = "";
   }
@@ -755,10 +758,14 @@ int main(int argc, char **argv) {
 	  cfg_explorer_url2 = "";
   }  
 
+  move(18,6);
   if (!cfg_explorer_url.empty()) {
-      cout << "Explorer: " << cfg_explorer_url << "\n";
+      printw("Explorer: %s",&cfg_explorer_url[0]);
+      //cerr << cfg_explorer_url << "// debug info"  << endl;
+      //cout << "Explorer: " << cfg_explorer_url << "\n";
    } else {
-      cout << "Explorer URL not set.\n";
+      printw("Explorer URL not set.");
+      //cout << "Explorer URL not set.\n";
   }
 
   try {
@@ -789,10 +796,14 @@ int main(int argc, char **argv) {
 	return(EXIT_FAILURE);
   }
 
+  move(20,6);
   if (cfg_explorer_url.empty()) {
-      cout << "Will accept nodes reporting blockheight at or above: " << nDefaultBlockHeight << endl;
+      printw("Will accepts nodes reporting blockheight at or above: %s", nDefaultBlockHeight);
+      //cout << "Will accept nodes reporting blockheight at or above: " << nDefaultBlockHeight << endl;
   } else {
-      cout << "Will seek current blockheight info from: " << cfg_explorer_url << endl;
+      move(19,16);
+      printw("Will provide current blockheight info.");
+      //cout << "Will seek current blockheight info from: " << cfg_explorer_url << endl;
   }
   for (int i=1; i<=10; i++) {
 	  try {
@@ -851,7 +862,7 @@ int main(int argc, char **argv) {
   }
   bool fDNS = true;
   if (!opts.ns) {
-    // move(y,x) to warning window ?
+    move(25,8); //  to warning window ?
     printw("No nameserver set. Not starting DNS server.\n");
     //printf("No nameserver set. Not starting DNS server.\n");
     fDNS = false;
@@ -885,7 +896,7 @@ int main(int argc, char **argv) {
   pthread_create(&threadBlock, NULL, ThreadBlockReader, NULL);
   printf("done\n");
   if (fDNS) {
-    move(4,2);	 printw("%s on %s:%i", opts.host, opts.ns, opts.nPort);
+    move(4,6);	 printw("%s on %s:%i", opts.host, opts.ns, opts.nPort);
     move(11,11); printw("DNS threads:");
     //printf("Starting %i DNS threads for %s on %s (port %i)...", opts.nDnsThreads, opts.host, opts.ns, opts.nPort);
     dnsThread.clear();
